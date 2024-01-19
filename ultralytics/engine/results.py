@@ -1,6 +1,6 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 """
-Ultralytics Results, Boxes and Masks classes for handling inference results.
+Ultralytics Results, Boxes and Masks classes for handling inference results
 
 Usage: See https://docs.ultralytics.com/modes/predict/
 """
@@ -13,17 +13,17 @@ import numpy as np
 import torch
 
 from ultralytics.data.augment import LetterBox
-from ultralytics.utils import LOGGER, SimpleClass, ops
+from ultralytics.utils import LOGGER, SimpleClass, deprecation_warn, ops
 from ultralytics.utils.plotting import Annotator, colors, save_one_box
-from ultralytics.utils.torch_utils import smart_inference_mode
 
 
 class BaseTensor(SimpleClass):
-    """Base tensor class with additional methods for easy manipulation and device handling."""
+    """
+    Base tensor class with additional methods for easy manipulation and device handling.
+    """
 
     def __init__(self, data, orig_shape) -> None:
-        """
-        Initialize BaseTensor with data and original shape.
+        """Initialize BaseTensor with data and original shape.
 
         Args:
             data (torch.Tensor | np.ndarray): Predictions, such as bboxes, masks and keypoints.
@@ -89,7 +89,7 @@ class Results(SimpleClass):
         _keys (tuple): A tuple of attribute names for non-empty attributes.
     """
 
-    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None) -> None:
+    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None) -> None:
         """Initialize the Results class."""
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
@@ -97,88 +97,87 @@ class Results(SimpleClass):
         self.masks = Masks(masks, self.orig_shape) if masks is not None else None  # native size or imgsz masks
         self.probs = Probs(probs) if probs is not None else None
         self.keypoints = Keypoints(keypoints, self.orig_shape) if keypoints is not None else None
-        self.obb = OBB(obb, self.orig_shape) if obb is not None else None
-        self.speed = {"preprocess": None, "inference": None, "postprocess": None}  # milliseconds per image
+        self.speed = {'preprocess': None, 'inference': None, 'postprocess': None}  # milliseconds per image
         self.names = names
         self.path = path
         self.save_dir = None
-        self._keys = "boxes", "masks", "probs", "keypoints", "obb"
+        self._keys = ('boxes', 'masks', 'probs', 'keypoints')
 
     def __getitem__(self, idx):
         """Return a Results object for the specified index."""
-        return self._apply("__getitem__", idx)
+        r = self.new()
+        for k in self.keys:
+            setattr(r, k, getattr(self, k)[idx])
+        return r
 
     def __len__(self):
         """Return the number of detections in the Results object."""
-        for k in self._keys:
-            v = getattr(self, k)
-            if v is not None:
-                return len(v)
+        for k in self.keys:
+            return len(getattr(self, k))
 
     def update(self, boxes=None, masks=None, probs=None):
         """Update the boxes, masks, and probs attributes of the Results object."""
         if boxes is not None:
-            self.boxes = Boxes(ops.clip_boxes(boxes, self.orig_shape), self.orig_shape)
+            ops.clip_boxes(boxes, self.orig_shape)  # clip boxes
+            self.boxes = Boxes(boxes, self.orig_shape)
         if masks is not None:
             self.masks = Masks(masks, self.orig_shape)
         if probs is not None:
             self.probs = probs
 
-    def _apply(self, fn, *args, **kwargs):
-        """
-        Applies a function to all non-empty attributes and returns a new Results object with modified attributes. This
-        function is internally called by methods like .to(), .cuda(), .cpu(), etc.
-
-        Args:
-            fn (str): The name of the function to apply.
-            *args: Variable length argument list to pass to the function.
-            **kwargs: Arbitrary keyword arguments to pass to the function.
-
-        Returns:
-            Results: A new Results object with attributes modified by the applied function.
-        """
-        r = self.new()
-        for k in self._keys:
-            v = getattr(self, k)
-            if v is not None:
-                setattr(r, k, getattr(v, fn)(*args, **kwargs))
-        return r
-
     def cpu(self):
         """Return a copy of the Results object with all tensors on CPU memory."""
-        return self._apply("cpu")
+        r = self.new()
+        for k in self.keys:
+            setattr(r, k, getattr(self, k).cpu())
+        return r
 
     def numpy(self):
         """Return a copy of the Results object with all tensors as numpy arrays."""
-        return self._apply("numpy")
+        r = self.new()
+        for k in self.keys:
+            setattr(r, k, getattr(self, k).numpy())
+        return r
 
     def cuda(self):
         """Return a copy of the Results object with all tensors on GPU memory."""
-        return self._apply("cuda")
+        r = self.new()
+        for k in self.keys:
+            setattr(r, k, getattr(self, k).cuda())
+        return r
 
     def to(self, *args, **kwargs):
         """Return a copy of the Results object with tensors on the specified device and dtype."""
-        return self._apply("to", *args, **kwargs)
+        r = self.new()
+        for k in self.keys:
+            setattr(r, k, getattr(self, k).to(*args, **kwargs))
+        return r
 
     def new(self):
         """Return a new Results object with the same image, path, and names."""
         return Results(orig_img=self.orig_img, path=self.path, names=self.names)
 
+    @property
+    def keys(self):
+        """Return a list of non-empty attribute names."""
+        return [k for k in self._keys if getattr(self, k) is not None]
+
     def plot(
-        self,
-        conf=True,
-        line_width=None,
-        font_size=None,
-        font="Arial.ttf",
-        pil=False,
-        img=None,
-        im_gpu=None,
-        kpt_radius=5,
-        kpt_line=True,
-        labels=True,
-        boxes=True,
-        masks=True,
-        probs=True,
+            self,
+            conf=True,
+            line_width=None,
+            font_size=None,
+            font='Arial.ttf',
+            pil=False,
+            img=None,
+            im_gpu=None,
+            kpt_radius=5,
+            kpt_line=True,
+            labels=True,
+            boxes=True,
+            masks=True,
+            probs=True,
+            **kwargs  # deprecated args TODO: remove support in 8.2
     ):
         """
         Plots the detection results on an input RGB image. Accepts a numpy array (cv2) or a PIL Image.
@@ -216,11 +215,21 @@ class Results(SimpleClass):
             ```
         """
         if img is None and isinstance(self.orig_img, torch.Tensor):
-            img = (self.orig_img[0].detach().permute(1, 2, 0).contiguous() * 255).to(torch.uint8).cpu().numpy()
+            img = (self.orig_img[0].detach().permute(1, 2, 0).cpu().contiguous() * 255).to(torch.uint8).numpy()
+
+        # Deprecation warn TODO: remove in 8.2
+        if 'show_conf' in kwargs:
+            deprecation_warn('show_conf', 'conf')
+            conf = kwargs['show_conf']
+            assert isinstance(conf, bool), '`show_conf` should be of boolean type, i.e, show_conf=True/False'
+
+        if 'line_thickness' in kwargs:
+            deprecation_warn('line_thickness', 'line_width')
+            line_width = kwargs['line_thickness']
+            assert isinstance(line_width, int), '`line_width` should be of int type, i.e, line_width=3'
 
         names = self.names
-        is_obb = self.obb is not None
-        pred_boxes, show_boxes = self.obb if is_obb else self.boxes, boxes
+        pred_boxes, show_boxes = self.boxes, boxes
         pred_masks, show_masks = self.masks, masks
         pred_probs, show_probs = self.probs, probs
         annotator = Annotator(
@@ -229,35 +238,28 @@ class Results(SimpleClass):
             font_size,
             font,
             pil or (pred_probs is not None and show_probs),  # Classify tasks default to pil=True
-            example=names,
-        )
+            example=names)
 
         # Plot Segment results
         if pred_masks and show_masks:
             if im_gpu is None:
                 img = LetterBox(pred_masks.shape[1:])(image=annotator.result())
-                im_gpu = (
-                    torch.as_tensor(img, dtype=torch.float16, device=pred_masks.data.device)
-                    .permute(2, 0, 1)
-                    .flip(0)
-                    .contiguous()
-                    / 255
-                )
+                im_gpu = torch.as_tensor(img, dtype=torch.float16, device=pred_masks.data.device).permute(
+                    2, 0, 1).flip(0).contiguous() / 255
             idx = pred_boxes.cls if pred_boxes else range(len(pred_masks))
             annotator.masks(pred_masks.data, colors=[colors(x, True) for x in idx], im_gpu=im_gpu)
 
         # Plot Detect results
-        if pred_boxes is not None and show_boxes:
+        if pred_boxes and show_boxes:
             for d in reversed(pred_boxes):
                 c, conf, id = int(d.cls), float(d.conf) if conf else None, None if d.id is None else int(d.id.item())
-                name = ("" if id is None else f"id:{id} ") + names[c]
-                label = (f"{name} {conf:.2f}" if conf else name) if labels else None
-                box = d.xyxyxyxy.reshape(-1, 4, 2).squeeze() if is_obb else d.xyxy.squeeze()
-                annotator.box_label(box, label, color=colors(c, True), rotated=is_obb)
+                name = ('' if id is None else f'id:{id} ') + names[c]
+                label = (f'{name} {conf:.2f}' if conf else name) if labels else None
+                annotator.box_label(d.xyxy.squeeze(), label, color=colors(c, True))
 
         # Plot Classify results
         if pred_probs is not None and show_probs:
-            text = ",\n".join(f"{names[j] if names else j} {pred_probs.data[j]:.2f}" for j in pred_probs.top5)
+            text = ',\n'.join(f'{names[j] if names else j} {pred_probs.data[j]:.2f}' for j in pred_probs.top5)
             x = round(self.orig_shape[0] * 0.03)
             annotator.text([x, x], text, txt_color=(255, 255, 255))  # TODO: allow setting colors
 
@@ -269,12 +271,14 @@ class Results(SimpleClass):
         return annotator.result()
 
     def verbose(self):
-        """Return log string for each task."""
-        log_string = ""
+        """
+        Return log string for each task.
+        """
+        log_string = ''
         probs = self.probs
         boxes = self.boxes
         if len(self) == 0:
-            return log_string if probs is not None else f"{log_string}(no detections), "
+            return log_string if probs is not None else f'{log_string}(no detections), '
         if probs is not None:
             log_string += f"{', '.join(f'{self.names[j]} {probs.data[j]:.2f}' for j in probs.top5)}, "
         if boxes:
@@ -291,35 +295,34 @@ class Results(SimpleClass):
             txt_file (str): txt file path.
             save_conf (bool): save confidence score or not.
         """
-        is_obb = self.obb is not None
-        boxes = self.obb if is_obb else self.boxes
+        boxes = self.boxes
         masks = self.masks
         probs = self.probs
         kpts = self.keypoints
         texts = []
         if probs is not None:
             # Classify
-            [texts.append(f"{probs.data[j]:.2f} {self.names[j]}") for j in probs.top5]
+            [texts.append(f'{probs.data[j]:.2f} {self.names[j]}') for j in probs.top5]
         elif boxes:
             # Detect/segment/pose
             for j, d in enumerate(boxes):
                 c, conf, id = int(d.cls), float(d.conf), None if d.id is None else int(d.id.item())
-                line = (c, *(d.xyxyxyxyn.view(-1) if is_obb else d.xywhn.view(-1)))
+                line = (c, *d.xywhn.view(-1))
                 if masks:
                     seg = masks[j].xyn[0].copy().reshape(-1)  # reversed mask.xyn, (n,2) to (n*2)
                     line = (c, *seg)
                 if kpts is not None:
                     kpt = torch.cat((kpts[j].xyn, kpts[j].conf[..., None]), 2) if kpts[j].has_visible else kpts[j].xyn
-                    line += (*kpt.reshape(-1).tolist(),)
-                line += (conf,) * save_conf + (() if id is None else (id,))
-                texts.append(("%g " * len(line)).rstrip() % line)
+                    line += (*kpt.reshape(-1).tolist(), )
+                line += (conf, ) * save_conf + (() if id is None else (id, ))
+                texts.append(('%g ' * len(line)).rstrip() % line)
 
         if texts:
             Path(txt_file).parent.mkdir(parents=True, exist_ok=True)  # make directory
-            with open(txt_file, "a") as f:
-                f.writelines(text + "\n" for text in texts)
+            with open(txt_file, 'a') as f:
+                f.writelines(text + '\n' for text in texts)
 
-    def save_crop(self, save_dir, file_name=Path("im.jpg")):
+    def save_crop(self, save_dir, file_name=Path('im.jpg')):
         """
         Save cropped predictions to `save_dir/cls/file_name.jpg`.
 
@@ -328,23 +331,22 @@ class Results(SimpleClass):
             file_name (str | pathlib.Path): File name.
         """
         if self.probs is not None:
-            LOGGER.warning("WARNING ⚠️ Classify task do not support `save_crop`.")
+            LOGGER.warning('WARNING ⚠️ Classify task do not support `save_crop`.')
             return
-        if self.obb is not None:
-            LOGGER.warning("WARNING ⚠️ OBB task do not support `save_crop`.")
-            return
+        if isinstance(save_dir, str):
+            save_dir = Path(save_dir)
+        if isinstance(file_name, str):
+            file_name = Path(file_name)
         for d in self.boxes:
-            save_one_box(
-                d.xyxy,
-                self.orig_img.copy(),
-                file=Path(save_dir) / self.names[int(d.cls)] / f"{Path(file_name)}.jpg",
-                BGR=True,
-            )
+            save_one_box(d.xyxy,
+                         self.orig_img.copy(),
+                         file=save_dir / self.names[int(d.cls)] / f'{file_name.stem}.jpg',
+                         BGR=True)
 
     def tojson(self, normalize=False):
         """Convert the object to JSON format."""
         if self.probs is not None:
-            LOGGER.warning("Warning: Classify task do not support `tojson` yet.")
+            LOGGER.warning('Warning: Classify task do not support `tojson` yet.')
             return
 
         import json
@@ -354,19 +356,19 @@ class Results(SimpleClass):
         data = self.boxes.data.cpu().tolist()
         h, w = self.orig_shape if normalize else (1, 1)
         for i, row in enumerate(data):  # xyxy, track_id if tracking, conf, class_id
-            box = {"x1": row[0] / w, "y1": row[1] / h, "x2": row[2] / w, "y2": row[3] / h}
+            box = {'x1': row[0] / w, 'y1': row[1] / h, 'x2': row[2] / w, 'y2': row[3] / h}
             conf = row[-2]
             class_id = int(row[-1])
             name = self.names[class_id]
-            result = {"name": name, "class": class_id, "confidence": conf, "box": box}
+            result = {'name': name, 'class': class_id, 'confidence': conf, 'box': box}
             if self.boxes.is_track:
-                result["track_id"] = int(row[-3])  # track ID
+                result['track_id'] = int(row[-3])  # track ID
             if self.masks:
                 x, y = self.masks.xy[i][:, 0], self.masks.xy[i][:, 1]  # numpy array
-                result["segments"] = {"x": (x / w).tolist(), "y": (y / h).tolist()}
+                result['segments'] = {'x': (x / w).tolist(), 'y': (y / h).tolist()}
             if self.keypoints is not None:
                 x, y, visible = self.keypoints[i].data[0].cpu().unbind(dim=1)  # torch Tensor
-                result["keypoints"] = {"x": (x / w).tolist(), "y": (y / h).tolist(), "visible": visible.tolist()}
+                result['keypoints'] = {'x': (x / w).tolist(), 'y': (y / h).tolist(), 'visible': visible.tolist()}
             results.append(result)
 
         # Convert detections to JSON
@@ -405,7 +407,7 @@ class Boxes(BaseTensor):
         if boxes.ndim == 1:
             boxes = boxes[None, :]
         n = boxes.shape[-1]
-        assert n in (6, 7), f"expected 6 or 7 values but got {n}"  # xyxy, track_id, conf, cls
+        assert n in (6, 7), f'expected `n` in [6, 7], but got {n}'  # xyxy, track_id, conf, cls
         super().__init__(boxes, orig_shape)
         self.is_track = n == 7
         self.orig_shape = orig_shape
@@ -454,12 +456,19 @@ class Boxes(BaseTensor):
         xywh[..., [1, 3]] /= self.orig_shape[0]
         return xywh
 
+    @property
+    def boxes(self):
+        """Return the raw bboxes tensor (deprecated)."""
+        LOGGER.warning("WARNING ⚠️ 'Boxes.boxes' is deprecated. Use 'Boxes.data' instead.")
+        return self.data
+
 
 class Masks(BaseTensor):
     """
     A class for storing and manipulating detection masks.
 
     Attributes:
+        segments (list): Deprecated property for segments (normalized).
         xy (list): A list of segments in pixel coordinates.
         xyn (list): A list of normalized segments.
 
@@ -478,12 +487,20 @@ class Masks(BaseTensor):
 
     @property
     @lru_cache(maxsize=1)
+    def segments(self):
+        """Return segments (normalized). Deprecated; use xyn property instead."""
+        LOGGER.warning(
+            "WARNING ⚠️ 'Masks.segments' is deprecated. Use 'Masks.xyn' for segments (normalized) and 'Masks.xy' for segments (pixels) instead."
+        )
+        return self.xyn
+
+    @property
+    @lru_cache(maxsize=1)
     def xyn(self):
         """Return normalized segments."""
         return [
             ops.scale_coords(self.data.shape[1:], x, self.orig_shape, normalize=True)
-            for x in ops.masks2segments(self.data)
-        ]
+            for x in ops.masks2segments(self.data)]
 
     @property
     @lru_cache(maxsize=1)
@@ -491,8 +508,13 @@ class Masks(BaseTensor):
         """Return segments in pixel coordinates."""
         return [
             ops.scale_coords(self.data.shape[1:], x, self.orig_shape, normalize=False)
-            for x in ops.masks2segments(self.data)
-        ]
+            for x in ops.masks2segments(self.data)]
+
+    @property
+    def masks(self):
+        """Return the raw masks tensor. Deprecated; use data attribute instead."""
+        LOGGER.warning("WARNING ⚠️ 'Masks.masks' is deprecated. Use 'Masks.data' instead.")
+        return self.data
 
 
 class Keypoints(BaseTensor):
@@ -511,14 +533,10 @@ class Keypoints(BaseTensor):
         to(device, dtype): Returns a copy of the keypoints tensor with the specified device and dtype.
     """
 
-    @smart_inference_mode()  # avoid keypoints < conf in-place error
     def __init__(self, keypoints, orig_shape) -> None:
         """Initializes the Keypoints object with detection keypoints and original image size."""
         if keypoints.ndim == 2:
             keypoints = keypoints[None, :]
-        if keypoints.shape[2] == 3:  # x, y, conf
-            mask = keypoints[..., 2] < 0.5  # points with conf < 0.5 (not visible)
-            keypoints[..., :2][mask] = 0
         super().__init__(keypoints, orig_shape)
         self.has_visible = self.data.shape[-1] == 3
 
@@ -562,7 +580,6 @@ class Probs(BaseTensor):
     """
 
     def __init__(self, probs, orig_shape=None) -> None:
-        """Initialize the Probs class with classification probabilities and optional original shape of the image."""
         super().__init__(probs, orig_shape)
 
     @property
@@ -588,88 +605,3 @@ class Probs(BaseTensor):
     def top5conf(self):
         """Return the confidences of top 5."""
         return self.data[self.top5]
-
-
-class OBB(BaseTensor):
-    """
-    A class for storing and manipulating Oriented Bounding Boxes (OBB).
-
-    Args:
-        boxes (torch.Tensor | numpy.ndarray): A tensor or numpy array containing the detection boxes,
-            with shape (num_boxes, 7) or (num_boxes, 8). The last two columns contain confidence and class values.
-            If present, the third last column contains track IDs, and the fifth column from the left contains rotation.
-        orig_shape (tuple): Original image size, in the format (height, width).
-
-    Attributes:
-        xywhr (torch.Tensor | numpy.ndarray): The boxes in [x_center, y_center, width, height, rotation] format.
-        conf (torch.Tensor | numpy.ndarray): The confidence values of the boxes.
-        cls (torch.Tensor | numpy.ndarray): The class values of the boxes.
-        id (torch.Tensor | numpy.ndarray): The track IDs of the boxes (if available).
-        xyxyxyxyn (torch.Tensor | numpy.ndarray): The rotated boxes in xyxyxyxy format normalized by original image size.
-        xyxyxyxy (torch.Tensor | numpy.ndarray): The rotated boxes in xyxyxyxy format.
-        xyxy (torch.Tensor | numpy.ndarray): The horizontal boxes in xyxyxyxy format.
-        data (torch.Tensor): The raw OBB tensor (alias for `boxes`).
-
-    Methods:
-        cpu(): Move the object to CPU memory.
-        numpy(): Convert the object to a numpy array.
-        cuda(): Move the object to CUDA memory.
-        to(*args, **kwargs): Move the object to the specified device.
-    """
-
-    def __init__(self, boxes, orig_shape) -> None:
-        """Initialize the Boxes class."""
-        if boxes.ndim == 1:
-            boxes = boxes[None, :]
-        n = boxes.shape[-1]
-        assert n in (7, 8), f"expected 7 or 8 values but got {n}"  # xywh, rotation, track_id, conf, cls
-        super().__init__(boxes, orig_shape)
-        self.is_track = n == 8
-        self.orig_shape = orig_shape
-
-    @property
-    def xywhr(self):
-        """Return the rotated boxes in xywhr format."""
-        return self.data[:, :5]
-
-    @property
-    def conf(self):
-        """Return the confidence values of the boxes."""
-        return self.data[:, -2]
-
-    @property
-    def cls(self):
-        """Return the class values of the boxes."""
-        return self.data[:, -1]
-
-    @property
-    def id(self):
-        """Return the track IDs of the boxes (if available)."""
-        return self.data[:, -3] if self.is_track else None
-
-    @property
-    @lru_cache(maxsize=2)
-    def xyxyxyxy(self):
-        """Return the boxes in xyxyxyxy format, (N, 4, 2)."""
-        return ops.xywhr2xyxyxyxy(self.xywhr)
-
-    @property
-    @lru_cache(maxsize=2)
-    def xyxyxyxyn(self):
-        """Return the boxes in xyxyxyxy format, (N, 4, 2)."""
-        xyxyxyxyn = self.xyxyxyxy.clone() if isinstance(self.xyxyxyxy, torch.Tensor) else np.copy(self.xyxyxyxy)
-        xyxyxyxyn[..., 0] /= self.orig_shape[1]
-        xyxyxyxyn[..., 1] /= self.orig_shape[1]
-        return xyxyxyxyn
-
-    @property
-    @lru_cache(maxsize=2)
-    def xyxy(self):
-        """Return the horizontal boxes in xyxy format, (N, 4)."""
-        # This way to fit both torch and numpy version
-        x1 = self.xyxyxyxy[..., 0].min(1).values
-        x2 = self.xyxyxyxy[..., 0].max(1).values
-        y1 = self.xyxyxyxy[..., 1].min(1).values
-        y2 = self.xyxyxyxy[..., 1].max(1).values
-        xyxy = [x1, y1, x2, y2]
-        return np.stack(xyxy, axis=-1) if isinstance(self.data, np.ndarray) else torch.stack(xyxy, dim=-1)

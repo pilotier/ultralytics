@@ -12,7 +12,7 @@ body:
     attributes:
       label: Search before asking
       description: >
-        Please search the Ultralytics [Docs](https://docs.ultralytics.com) and [issues](https://github.com/ultralytics/ultralytics/issues) to see if a similar bug report already exists.
+        Please search the [issues](https://github.com/ultralytics/ultralytics/issues) to see if a similar bug report already exists.
       options:
         - label: >
             I have searched the YOLOv8 [issues](https://github.com/ultralytics/ultralytics/issues) and found no similar bug report.
@@ -25,14 +25,13 @@ body:
         Please select the part of YOLOv8 where you found the bug.
       multiple: true
       options:
-        - "Install"
-        - "Train"
-        - "Val"
-        - "Predict"
+        - "Training"
+        - "Validation"
+        - "Detection"
         - "Export"
+        - "PyTorch Hub"
         - "Multi-GPU"
-        - "Augmentation"
-        - "Hyperparameter Tuning"
+        - "Evolution"
         - "Integrations"
         - "Other"
     validations:
@@ -52,19 +51,9 @@ body:
       label: Environment
       description: Please specify the software and hardware you used to produce the bug.
       placeholder: |
-        Paste output of `yolo checks` or `ultralytics.checks()` command, i.e.:
-        ```
-        Ultralytics YOLOv8.0.181 🚀 Python-3.11.2 torch-2.0.1 CPU (Apple M2)
-        Setup complete ✅ (8 CPUs, 16.0 GB RAM, 266.5/460.4 GB disk)
-
-        OS                  macOS-13.5.2
-        Environment         Jupyter
-        Python              3.11.2
-        Install             git
-        RAM                 16.00 GB
-        CPU                 Apple M2
-        CUDA                None
-        ```
+        - YOLO: Ultralytics YOLOv8.0.21 🚀 Python-3.8.10 torch-1.13.1+cu117 CUDA:0 (A100-SXM-80GB, 81251MiB)
+        - OS: Ubuntu 20.04
+        - Python: 3.8.10
     validations:
       required: false
 

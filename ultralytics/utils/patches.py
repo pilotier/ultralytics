@@ -1,7 +1,8 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
-"""Monkey patches to update/extend functionality of existing functions."""
+"""
+Monkey patches to update/extend functionality of existing functions
+"""
 
-import time
 from pathlib import Path
 
 import cv2
@@ -13,8 +14,7 @@ _imshow = cv2.imshow  # copy to avoid recursion errors
 
 
 def imread(filename: str, flags: int = cv2.IMREAD_COLOR):
-    """
-    Read an image from a file.
+    """Read an image from a file.
 
     Args:
         filename (str): Path to the file to read.
@@ -27,8 +27,7 @@ def imread(filename: str, flags: int = cv2.IMREAD_COLOR):
 
 
 def imwrite(filename: str, img: np.ndarray, params=None):
-    """
-    Write an image to a file.
+    """Write an image to a file.
 
     Args:
         filename (str): Path to the file to write.
@@ -46,14 +45,13 @@ def imwrite(filename: str, img: np.ndarray, params=None):
 
 
 def imshow(winname: str, mat: np.ndarray):
-    """
-    Displays an image in the specified window.
+    """Displays an image in the specified window.
 
     Args:
         winname (str): Name of the window.
         mat (np.ndarray): Image to be shown.
     """
-    _imshow(winname.encode("unicode_escape").decode(), mat)
+    _imshow(winname.encode('unicode_escape').decode(), mat)
 
 
 # PyTorch functions ----------------------------------------------------------------------------------------------------
@@ -61,9 +59,7 @@ _torch_save = torch.save  # copy to avoid recursion errors
 
 
 def torch_save(*args, **kwargs):
-    """
-    Use dill (if exists) to serialize the lambda functions where pickle does not do this. Also adds 3 retries with
-    exponential standoff in case of save failure to improve robustness to transient issues.
+    """Use dill (if exists) to serialize the lambda functions where pickle does not do this.
 
     Args:
         *args (tuple): Positional arguments to pass to torch.save.
@@ -74,13 +70,6 @@ def torch_save(*args, **kwargs):
     except ImportError:
         import pickle
 
-    if "pickle_module" not in kwargs:
-        kwargs["pickle_module"] = pickle  # noqa
-
-    for i in range(4):  # 3 retries
-        try:
-            return _torch_save(*args, **kwargs)
-        except RuntimeError:  # unable to save, possibly waiting for device to flush or anti-virus to finish scanning
-            if i == 3:
-                raise
-            time.sleep((2**i) / 2)  # exponential standoff 0.5s, 1.0s, 2.0s
+    if 'pickle_module' not in kwargs:
+        kwargs['pickle_module'] = pickle  # noqa
+    return _torch_save(*args, **kwargs)
